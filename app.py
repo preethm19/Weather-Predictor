@@ -1,6 +1,4 @@
 """Flask application exposing the ANN weather condition predictor."""
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 from __future__ import annotations
 
 import json
@@ -344,10 +342,6 @@ def predict_condition(payload: Dict[str, object]) -> Tuple[str, float, Dict[str,
     confidence = float(round(probabilities[predicted_idx], 4))
     return condition, confidence, probability_map
 
-@app.route("/")
-def index():
-    return "Hello!"
-
 @app.route("/", methods=["GET", "POST"])
 def index():
     prediction = None
@@ -589,3 +583,5 @@ def chat_api():
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
+if __name__ == "__main__":
+    app.run(debug=True)
