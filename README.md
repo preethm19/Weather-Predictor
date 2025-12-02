@@ -279,5 +279,3 @@ Add to `LOCATION_REGION_MAP` in `app.py` to support more Indian locations.
 ## 📄 License
 
 This project is developed for educational purposes demonstrating modern AI and ML integration patterns.
-
----
