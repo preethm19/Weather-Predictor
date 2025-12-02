@@ -1,4 +1,6 @@
 """Flask application exposing the ANN weather condition predictor."""
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 from __future__ import annotations
 
 import json
@@ -344,7 +346,7 @@ def predict_condition(payload: Dict[str, object]) -> Tuple[str, float, Dict[str,
 
 @app.route("/")
 def index():
-    return "Hello from Flask on Vercel!"
+    return "Hello!"
 
 @app.route("/", methods=["GET", "POST"])
 def index():
