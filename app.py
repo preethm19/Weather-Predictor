@@ -588,14 +588,3 @@ def chat_api():
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
-
-if __name__ == "__main__":
-    app.run(debug=True)
-
-
-if __name__ == "__main__":
-    # Render gives you PORT as an environment variable
-    port = int(os.environ.get("PORT", 5000))
-
-    # Bind to 0.0.0.0 so Render can detect it
-    app.run(host="0.0.0.0", port=port)
