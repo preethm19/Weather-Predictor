@@ -342,14 +342,9 @@ def predict_condition(payload: Dict[str, object]) -> Tuple[str, float, Dict[str,
     confidence = float(round(probabilities[predicted_idx], 4))
     return condition, confidence, probability_map
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
-
-app = Flask(__name__)
-
 @app.route("/")
-def home():
-    return "Hello from Vercel Flask!"
+def index():
+    return "Hello from Flask on Vercel!"
 
 @app.route("/", methods=["GET", "POST"])
 def index():
