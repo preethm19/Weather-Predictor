@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>India Weather Condition Predictor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <a href="#main" class="skip-link">Skip to main content</a>
+    <header class="navbar">
+        <div class="navbar-content">
+            <h1 class="navbar-title"><i class="fas fa-cloud"></i> Weather Predictor</h1>
+            <p class="navbar-subtitle">AI-Powered Indian Weather Forecasting</p>
+        </div>
+    </header>
+
+    <!-- Chat Prompt Bar (ChatGPT-style) -->
+    <div class="chat-prompt-bar">
+        <div class="chat-prompt-container">
+            <form id="chatForm" class="chat-form" autocomplete="off">
+                <div class="chat-input-wrapper">
+                    <input
+                        id="chatInput"
+                        class="chat-input"
+                        type="text"
+                        placeholder="Ask about weather..."
+                        aria-label="Ask the weather assistant"
+                    />
+                    <button type="submit" class="btn-chat-send" id="chatSendBtn" aria-label="Send message">
+                        <i class="fas fa-arrow-up"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Chat History Panel (appears on first message) -->
+    <div id="chatHistoryPanel" class="chat-history-panel hidden">
+        <div class="chat-history-container">
+            <div id="chatMessages" class="chat-messages" role="log" aria-live="polite" aria-label="Chat message history"></div>
+        </div>
+    </div>
+
+    <main class="container">
+        <div class="grid-layout">
+            <!-- Main Form Section -->
+            <section class="card primary-card" style="grid-column: 1 / -1;">
+                <div class="card-header">
+                    <h2><i class="fas fa-thermometer-half"></i> Enter Weather Data</h2>
+                    <p class="card-description">Provide atmospheric readings for accurate predictions</p>
+                </div>
+
+                {% if error %}
+                <div class="alert alert-error">
+                    <i class="fas fa-exclamation-circle"></i>
+                    {{ error }}
+                </div>
+                {% endif %}
+
+                {% if prediction %}
+                <div id="predictionCard" class="prediction-card hidden-before">
+                    <div class="prediction-header">
+                        <h3>Predicted Condition</h3>
+                    </div>
+                    <div class="prediction-result">
+                        <div class="condition-badge {% if prediction.condition == 'Sunny' %}sunny{% elif prediction.condition == 'Rainy' %}rainy{% elif prediction.condition == 'Cloudy' %}cloudy{% elif prediction.condition == 'Snowy' %}snowy{% else %}stormy{% endif %}">
+                            {% if prediction.condition == 'Sunny' %}
+                                <i class="fas fa-sun" aria-label="Sunny weather"></i>
+                            {% elif prediction.condition == 'Rainy' %}
+                                <i class="fas fa-cloud-rain" aria-label="Rainy weather"></i>
+                            {% elif prediction.condition == 'Cloudy' %}
+                                <i class="fas fa-cloud" aria-label="Cloudy weather"></i>
+                            {% elif prediction.condition == 'Snowy' %}
+                                <i class="fas fa-snowflake" aria-label="Snowy weather"></i>
+                            {% else %}
+                                <i class="fas fa-wind" aria-label="Stormy weather"></i>
+                            {% endif %}
+                            <span class="condition-text">{{ prediction.condition }}</span>
+                        </div>
+                        <div class="confidence-meter">
+                            <div class="confidence-label">Confidence</div>
+                            <div class="progress-bar" role="progressbar" aria-valuenow="{{ (prediction.confidence * 100)|int }}" aria-valuemin="0" aria-valuemax="100">
+                                <div class="progress-fill" style="width: {{ prediction.confidence * 100 }}%">
+                                    {{ '%.1f'|format(prediction.confidence * 100) }}%
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="probabilities">
+                        <h3><i class="fas fa-chart-bar" aria-hidden="true"></i> Probability Distribution</h3>
+                        <p class="chart-summary">Most likely: <strong>{{ prediction.condition }}</strong> — confidence {{ '%.1f'|format(prediction.confidence * 100) }}%</p>
+                        <div class="chart-legend" aria-hidden="true">
+                            {% for label, prob in prediction.probabilities.items() %}
+                                <span class="legend-item">
+                                    {% if label == 'Sunny' %}
+                                        <span class="legend-swatch" style="background:var(--sunny-color)"></span>
+                                    {% elif label == 'Rainy' %}
+                                        <span class="legend-swatch" style="background:var(--rainy-color)"></span>
+                                    {% elif label == 'Cloudy' %}
+                                        <span class="legend-swatch" style="background:var(--cloudy-color)"></span>
+                                    {% elif label == 'Snowy' %}
+                                        <span class="legend-swatch" style="background:var(--snowy-color)"></span>
+                                    {% else %}
+                                        <span class="legend-swatch" style="background:var(--stormy-color)"></span>
+                                    {% endif %}
+                                    {{ label }}
+                                </span>
+                            {% endfor %}
+                        </div>
+                        <div aria-hidden="false" class="sr-only" aria-live="polite">
+                            Prediction probabilities:
+                            <ul>
+                                {% for label, prob in prediction.probabilities.items() %}
+                                    <li>{{ label }}: {{ '%.1f'|format(prob * 100) }} percent</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="probabilityChart" aria-label="Probability distribution chart for all weather conditions"></canvas>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <form method="post" class="weather-form">
+                    <div class="form-section">
+                        <h3><i class="fas fa-map-marker-alt" aria-hidden="true"></i> Location & Time</h3>
+                        <div class="form-grid-2col">
+                            <label class="form-label">
+                                <span>Region</span>
+                                <select name="region" required aria-label="Select your region">
+                                    {% for region in regions %}
+                                    <option value="{{ region }}" {% if form_data.region == region %}selected{% endif %}>{{ region }}</option>
+                                    {% endfor %}
+                                </select>
+                                <small class="form-hint">Choose the region for weather prediction</small>
+                            </label>
+                            <label class="form-label">
+                                <span>Month</span>
+                                <select name="month" required aria-label="Select the month">
+                                    {% for month in months %}
+                                    <option value="{{ month }}" {% if month == form_data.month|int %}selected{% endif %}>{{ month }}</option>
+                                    {% endfor %}
+                                </select>
+                                <small class="form-hint">Choose the month (1-12)</small>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3><i class="fas fa-tachometer-alt" aria-hidden="true"></i> Atmospheric Conditions</h3>
+                        <div class="form-grid-4col">
+                            <label class="form-label">
+                                <span>Temperature (°C)</span>
+                                <input id="temperature_c" type="range" step="0.1" required value="{{ form_data.temperature_c or 25 }}" min="-50" max="60" aria-label="Temperature in Celsius">
+                                <div class="range-row"><input name="temperature_c" type="number" class="range-edit" id="temperature_c_val" value="{{ form_data.temperature_c or 25 }}" step="0.1" min="-50" max="60" aria-label="Edit temperature value"><small class="form-hint">Range: -50 to 60°C</small></div>
+                            </label>
+                            <label class="form-label">
+                                <span>Humidity (%)</span>
+                                <input id="humidity_pct" type="range" step="0.1" required value="{{ form_data.humidity_pct or 50 }}" min="0" max="100" aria-label="Humidity percentage">
+                                <div class="range-row"><input name="humidity_pct" type="number" class="range-edit" id="humidity_pct_val" value="{{ form_data.humidity_pct or 50 }}" step="0.1" min="0" max="100" aria-label="Edit humidity value"><small class="form-hint">0-100%</small></div>
+                            </label>
+                            <label class="form-label">
+                                <span>Pressure (hPa)</span>
+                                <input id="pressure_hpa" type="range" step="0.1" required value="{{ form_data.pressure_hpa or 1002 }}" min="870" max="1085" aria-label="Atmospheric pressure in hectopascals">
+                                <div class="range-row">
+                                    <input name="pressure_hpa" type="number" class="range-edit" id="pressure_hpa_val" value="{{ form_data.pressure_hpa or 1002 }}" step="0.1" min="870" max="1085" aria-label="Edit pressure value">
+                                    <small class="form-hint">870-1085 hPa</small>
+                                </div>
+                            </label>
+                            <label class="form-label">
+                                <span>Wind Speed (km/h)</span>
+                                <input id="wind_speed_kph" type="range" step="0.1" required value="{{ form_data.wind_speed_kph or 14 }}" min="0" max="200" aria-label="Wind speed in kilometers per hour">
+                                <div class="range-row">
+                                    <input name="wind_speed_kph" type="number" class="range-edit" id="wind_speed_kph_val" value="{{ form_data.wind_speed_kph or 14 }}" step="0.1" min="0" max="200" aria-label="Edit wind speed value">
+                                    <small class="form-hint">0-200 km/h</small>
+                                </div>
+                            </label>
+                            <label class="form-label">
+                                <span>Precipitation (mm)</span>
+                                <input id="precip_mm" type="range" step="0.1" required value="{{ form_data.precip_mm or 0 }}" min="0" max="500" aria-label="Precipitation amount in millimeters">
+                                <div class="range-row">
+                                    <input name="precip_mm" type="number" class="range-edit" id="precip_mm_val" value="{{ form_data.precip_mm or 0 }}" step="0.1" min="0" max="500" aria-label="Edit precipitation value">
+                                    <small class="form-hint">0-500 mm</small>
+                                </div>
+                            </label>
+                            <label class="form-label">
+                                <span>Cloud Cover (%)</span>
+                                <input name="cloud_cover_pct" id="cloud_cover_pct" type="range" step="0.1" required value="{{ form_data.cloud_cover_pct or 30 }}" min="0" max="100" aria-label="Cloud cover percentage">
+                                <div class="range-row"><input type="number" class="range-edit" id="cloud_cover_pct_val" value="{{ form_data.cloud_cover_pct or 30 }}" step="0.1" min="0" max="100" aria-label="Edit cloud cover value"><small class="form-hint">0-100%</small></div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn-primary btn-lg" id="submitBtn">
+                        <i class="fas fa-magic" aria-hidden="true"></i> Predict Weather
+                    </button>
+                </form>
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>&copy; 2025 Weather Predictor. Powered by Neural Networks.</p>
+    </footer>
+
+    {% if prediction %}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const canvas = document.getElementById('probabilityChart');
+            if (!canvas) return;
+
+            // read labels/data injected by server
+            let labels = {{ prediction.labels | safe }};
+            let data = {{ prediction.data | safe }};
+
+            // sort by probability desc
+            const pairs = labels.map((label, i) => ({label, prob: data[i]}));
+            pairs.sort((a, b) => b.prob - a.prob);
+            labels = pairs.map(p => p.label);
+            data = pairs.map(p => p.prob);
+
+            // map label -> color via CSS vars
+            const css = getComputedStyle(document.documentElement);
+            const colorMap = {
+                'Sunny': css.getPropertyValue('--sunny-color').trim() || '#FFB300',
+                'Rainy': css.getPropertyValue('--rainy-color').trim() || '#1976D2',
+                'Cloudy': css.getPropertyValue('--cloudy-color').trim() || '#78909C',
+                'Snowy': css.getPropertyValue('--snowy-color').trim() || '#B3E5FC',
+                'Stormy': css.getPropertyValue('--stormy-color').trim() || '#424242'
+            };
+
+            const bgColors = labels.map(l => (colorMap[l] ? colorMap[l] : css.getPropertyValue('--primary-color')).replace(/\s/g,'') );
+
+            const ctx = canvas.getContext('2d');
+
+            const chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Probability',
+                        data: data,
+                        backgroundColor: bgColors,
+                        borderColor: bgColors,
+                        borderWidth: 1,
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: { duration: 900, easing: 'easeOutQuart' },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            max: 1,
+                            ticks: {
+                                callback: value => (value * 100).toFixed(0) + '%'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => {
+                                    const v = ctx.parsed.x !== undefined ? ctx.parsed.x : ctx.parsed.y;
+                                    return ctx.label + ': ' + (v * 100).toFixed(1) + '%';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // animate prediction card into view
+            const predCard = document.getElementById('predictionCard');
+            if (predCard) {
+                // ensure layout has applied
+                requestAnimationFrame(() => {
+                    predCard.classList.remove('hidden-before');
+                    predCard.classList.add('animate-in');
+                });
+            }
+
+            // make canvas height responsive to container
+            function resizeChart() {
+                canvas.style.height = Math.max(180, Math.min(420, canvas.parentElement.clientHeight - 12)) + 'px';
+                chart.resize();
+            }
+            window.addEventListener('resize', resizeChart);
+            resizeChart();
+
+            // helper to set display element (span or input)
+            function setDisplayValue(el, val) {
+                if (!el) return;
+                if (el.tagName === 'INPUT') el.value = val;
+                else el.textContent = val;
+            }
+
+            // update slider value displays (works with either span or input displays)
+            const temp = document.getElementById('temperature_c');
+            const hum = document.getElementById('humidity_pct');
+            const cloud = document.getElementById('cloud_cover_pct');
+            if (temp) {
+                const el = document.getElementById('temperature_c_val');
+                setDisplayValue(el, temp.value);
+                temp.addEventListener('input', () => setDisplayValue(el, temp.value));
+            }
+            if (hum) {
+                const el = document.getElementById('humidity_pct_val');
+                setDisplayValue(el, hum.value);
+                hum.addEventListener('input', () => setDisplayValue(el, hum.value));
+            }
+            if (cloud) {
+                const el = document.getElementById('cloud_cover_pct_val');
+                setDisplayValue(el, cloud.value);
+                cloud.addEventListener('input', () => setDisplayValue(el, cloud.value));
+            }
+        });
+    </script>
+    {% endif %}
+
+    <script>
+        // Form submission loading state and scroll to chart
+        document.querySelector('.weather-form').addEventListener('submit', function(e) {
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.classList.add('loading');
+            submitBtn.setAttribute('aria-busy', 'true');
+            
+            // Scroll to prediction chart after form submission
+            setTimeout(function() {
+                const predCard = document.getElementById('predictionCard');
+                if (predCard) {
+                    predCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 500); // Wait for response to render
+        });
+
+        // Form validation feedback
+        const inputs = document.querySelectorAll('.form-label input');
+        inputs.forEach(input => {
+            input.addEventListener('change', function() {
+                if (this.value && this.checkValidity()) {
+                    this.style.borderColor = '#4caf50';
+                } else if (this.value) {
+                    this.style.borderColor = '#f44336';
+                }
+            });
+        });
+
+        // Range inputs: update displayed values live (supports span or input display)
+        function _setDisplay(el, val) {
+            if (!el) return;
+            if (el.tagName === 'INPUT') el.value = val;
+            else el.textContent = val;
+        }
+
+        const ranges = document.querySelectorAll('input[type="range"]');
+        ranges.forEach(r => {
+            const id = r.id;
+            const display = id ? document.getElementById(id + '_val') : null;
+            if (display) _setDisplay(display, r.value);
+            r.addEventListener('input', function() {
+                if (display) _setDisplay(display, this.value);
+            });
+        });
+
+        // Editable number boxes (two-way sync with sliders)
+        const edits = document.querySelectorAll('.range-edit');
+        edits.forEach(ed => {
+            // deduce slider id from edit id convention: <name>_val -> <name>
+            const editId = ed.id; // e.g. pressure_hpa_val
+            const sliderId = editId ? editId.replace(/_val$/, '') : null;
+            const slider = sliderId ? document.getElementById(sliderId) : null;
+            if (!slider) return;
+            // initialize edit box to slider value
+            ed.value = slider.value;
+            // when user types in numeric box, update slider
+            ed.addEventListener('input', function() {
+                let v = this.value;
+                // clamp to slider min/max
+                const min = parseFloat(this.min || slider.min || -Infinity);
+                const max = parseFloat(this.max || slider.max || Infinity);
+                if (v === '' ) return;
+                v = Math.max(min, Math.min(max, parseFloat(v)));
+                slider.value = v;
+                // update any display badge for slider
+                const display = document.getElementById(sliderId + '_val');
+                if (display) display.textContent = v;
+            });
+            // when slider changes, update edit box
+            slider.addEventListener('input', function() {
+                ed.value = this.value;
+            });
+        });
+    </script>
+
+    <!-- Chat Assistant Script (Lightweight Toast-based) -->
+    <script>
+        // Use sessionStorage instead of localStorage for per-session persistence
+        // Chat will persist until page is closed, but clear on new session/refresh
+        const CHAT_SESSION_ID = crypto.randomUUID();
+        
+        const chatForm = document.getElementById('chatForm');
+        const chatInput = document.getElementById('chatInput');
+        const chatSendBtn = document.getElementById('chatSendBtn');
+        const chatHistoryPanel = document.getElementById('chatHistoryPanel');
+        const chatMessages = document.getElementById('chatMessages');
+        const CHAT_HISTORY_KEY = 'chatHistory_' + CHAT_SESSION_ID;
+
+        // Load chat history from sessionStorage on page load
+        function loadChatHistory() {
+            const storedMessages = sessionStorage.getItem(CHAT_HISTORY_KEY);
+            if (storedMessages) {
+                try {
+                    const messages = JSON.parse(storedMessages);
+                    if (messages.length > 0) {
+                        chatHistoryPanel.classList.remove('hidden');
+                        messages.forEach(msg => {
+                            const messageDiv = document.createElement('div');
+                            messageDiv.className = `chat-message chat-message-${msg.role}`;
+                            messageDiv.setAttribute('role', 'article');
+                            
+                            const badgeSpan = document.createElement('span');
+                            badgeSpan.className = `chat-badge chat-badge-${msg.role}`;
+                            badgeSpan.textContent = msg.role === 'user' ? 'You' : 'Assistant';
+                            
+                            const contentSpan = document.createElement('span');
+                            contentSpan.className = 'chat-content';
+                            contentSpan.textContent = msg.text;
+                            
+                            messageDiv.appendChild(badgeSpan);
+                            messageDiv.appendChild(contentSpan);
+                            chatMessages.appendChild(messageDiv);
+                        });
+                        // Auto-scroll to bottom
+                        chatMessages.scrollTop = chatMessages.scrollHeight;
+                    }
+                } catch (e) {
+                    console.error('Error loading chat history:', e);
+                }
+            }
+        }
+
+        // Save chat history to sessionStorage
+        function saveChatHistory() {
+            const messages = [];
+            document.querySelectorAll('.chat-message').forEach(msgEl => {
+                const role = msgEl.classList.contains('chat-message-user') ? 'user' : 'assistant';
+                const text = msgEl.querySelector('.chat-content')?.textContent || '';
+                messages.push({ role, text });
+            });
+            sessionStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(messages));
+        }
+
+        // Load chat history on page load
+        window.addEventListener('DOMContentLoaded', loadChatHistory);
+
+        function getWeatherContext() {
+            // Capture current form values
+            const context = {
+                region: document.querySelector('select[name="region"]')?.value || '',
+                month: document.querySelector('select[name="month"]')?.value || '',
+                temperature_c: parseFloat(document.querySelector('input[name="temperature_c"]')?.value || 0),
+                humidity_pct: parseFloat(document.querySelector('input[name="humidity_pct"]')?.value || 0),
+                pressure_hpa: parseFloat(document.querySelector('input[name="pressure_hpa"]')?.value || 0),
+                wind_speed_kph: parseFloat(document.querySelector('input[name="wind_speed_kph"]')?.value || 0),
+                precip_mm: parseFloat(document.querySelector('input[name="precip_mm"]')?.value || 0),
+                cloud_cover_pct: parseFloat(document.querySelector('input[name="cloud_cover_pct"]')?.value || 0),
+            };
+            
+            // Add prediction if available (check for prediction card)
+            const predCard = document.getElementById('predictionCard');
+            if (predCard && !predCard.classList.contains('hidden-before')) {
+                const conditionEl = document.querySelector('.condition-text');
+                const confidenceEl = document.querySelector('.progress-fill');
+                if (conditionEl && confidenceEl) {
+                    context.prediction = {
+                        condition: conditionEl.textContent,
+                        confidence: parseFloat(confidenceEl.textContent) / 100
+                    };
+                }
+            }
+            
+            return context;
+        }
+
+        function appendMessage(role, text) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `chat-message chat-message-${role}`;
+            messageDiv.setAttribute('role', 'article');
+            
+            const badgeSpan = document.createElement('span');
+            badgeSpan.className = `chat-badge chat-badge-${role}`;
+            badgeSpan.textContent = role === 'user' ? 'You' : 'Assistant';
+            
+            const contentSpan = document.createElement('span');
+            contentSpan.className = 'chat-content';
+            contentSpan.textContent = text;
+            
+            messageDiv.appendChild(badgeSpan);
+            messageDiv.appendChild(contentSpan);
+            chatMessages.appendChild(messageDiv);
+            
+            // Show history panel on first message
+            if (chatHistoryPanel.classList.contains('hidden')) {
+                chatHistoryPanel.classList.remove('hidden');
+            }
+            
+            // Save chat history to localStorage
+            saveChatHistory();
+            
+            // Auto-scroll to bottom
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function applyFormUpdates(suggestions) {
+            // Apply location, month, and condition suggestions to form fields.
+            if (!suggestions || Object.keys(suggestions).length === 0) return;
+            
+            // Update region dropdown
+            if (suggestions.region) {
+                const regionSelect = document.querySelector('select[name="region"]');
+                if (regionSelect) {
+                    regionSelect.value = suggestions.region;
+                }
+            }
+            
+            // Update month dropdown
+            if (suggestions.month) {
+                const monthSelect = document.querySelector('select[name="month"]');
+                if (monthSelect) {
+                    monthSelect.value = suggestions.month;
+                }
+            }
+            
+            // Update atmospheric conditions (sliders and editable inputs)
+            if (suggestions.conditions) {
+                const conditions = suggestions.conditions;
+                const fieldMap = {
+                    'temperature_c': 'temperature_c',
+                    'humidity_pct': 'humidity_pct',
+                    'pressure_hpa': 'pressure_hpa',
+                    'wind_speed_kph': 'wind_speed_kph',
+                    'precip_mm': 'precip_mm',
+                    'cloud_cover_pct': 'cloud_cover_pct'
+                };
+                
+                for (const [key, id] of Object.entries(fieldMap)) {
+                    if (key in conditions) {
+                        const value = conditions[key];
+                        const slider = document.getElementById(id);
+                        const editInput = document.getElementById(id + '_val');
+                        
+                        if (slider) {
+                            slider.value = value;
+                            if (editInput) editInput.value = value;
+                        } else {
+                            const nameInput = document.querySelector(`input[name="${id}"]`);
+                            if (nameInput) nameInput.value = value;
+                        }
+                    }
+                }
+            }
+        }
+
+        function sendMessage(e) {
+            e.preventDefault();
+            const userMessage = chatInput.value.trim();
+            if (!userMessage) return;
+
+            // Show user message in history
+            appendMessage('user', userMessage);
+
+            // Show loading state
+            chatSendBtn.disabled = true;
+            chatSendBtn.classList.add('loading');
+            const originalPlaceholder = chatInput.placeholder;
+            chatInput.placeholder = 'Sending...';
+            chatInput.value = '';
+
+            // Capture weather context
+            const weatherContext = getWeatherContext();
+
+            // Send to backend with context
+            fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: userMessage,
+                    session_id: CHAT_SESSION_ID,
+                    weather_context: weatherContext
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    appendMessage('assistant', `Error: ${data.error}`);
+                } else {
+                    appendMessage('assistant', data.response);
+                    
+                    // Apply form suggestions if available
+                    if (data.suggestions && Object.keys(data.suggestions).length > 0) {
+                        applyFormUpdates(data.suggestions);
+                        // Show a subtle toast indicating form was updated
+                        console.log('Form auto-updated with suggestions:', data.suggestions);
+                    }
+                }
+            })
+            .catch(err => {
+                appendMessage('assistant', `Network error: ${err.message}`);
+            })
+            .finally(() => {
+                chatSendBtn.disabled = false;
+                chatSendBtn.classList.remove('loading');
+                chatInput.placeholder = originalPlaceholder;
+                chatInput.focus();
+            });
+        }
+
+        chatForm.addEventListener('submit', sendMessage);
+    </script>
+</body>
+</html>
