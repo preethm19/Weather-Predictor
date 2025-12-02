@@ -464,6 +464,9 @@ def update_form():
     except (ValueError, KeyError, TypeError) as exc:
         return jsonify({"error": str(exc)}), 400
 
+@app.route("/")
+def home():
+    return "Hello from Render!"
 
 @app.route("/api/chat", methods=["POST"])
 def chat_api():
@@ -588,3 +591,11 @@ def chat_api():
 
 if __name__ == "__main__":
     app.run(debug=True)
+
+
+if __name__ == "__main__":
+    # Render gives you PORT as an environment variable
+    port = int(os.environ.get("PORT", 5000))
+
+    # Bind to 0.0.0.0 so Render can detect it
+    app.run(host="0.0.0.0", port=port)
