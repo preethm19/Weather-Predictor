@@ -1,4 +1,4 @@
-# India Weather Assistant
+# India Weather Assistant: A  Mini Project
 
 An intelligent weather prediction application powered by Artificial Neural Networks (ANN) and Large Language Models (LLM). Features an interactive web interface with real-time probability visualization, AI-powered chat assistant, and smart auto-fill capabilities that detect locations and atmospheric conditions from natural language conversations.
 
